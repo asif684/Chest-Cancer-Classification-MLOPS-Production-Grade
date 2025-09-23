@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chest Cancer Classifier</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        /* Background image with soft overlay */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: url('https://medanta.s3.ap-south-1.amazonaws.com/banners/July2024/ZNcjwT4LxIlOxF4DGSokP3AB862xpu-metaQnJlYXN0IENhbmNlci5qcGc=-.jpg') no-repeat center center fixed;
+            background-size: cover;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Overlay gradient for readability */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: -1;
+        }
+
+        /* Central card */
+        .main-card {
+            max-width: 950px;
+            width: 100%;
+            background: rgba(255,255,255,0.97);
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            padding: 40px;
+            display: flex;
+            flex-direction: row;
+            gap: 40px;
+        }
+
+        /* Left image/video section */
+        .image-part {
+            flex: 1;
+            position: relative;
+            height: 320px;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+        }
+
+        .image-part video,
+        .image-part img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Upload / Predict buttons */
+        .btn-upload {
+            width: 48%;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        /* Right result section */
+        .prediction-result {
+            flex: 1;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 15px;
+            min-height: 320px;
+            background-color: #fafafa;
+            font-family: monospace;
+            overflow-y: auto;
+        }
+
+        h3 {
+            font-weight: 700;
+            color: #0d6efd;
+            margin-bottom: 30px;
+        }
+
+        h5 {
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        /* Loader */
+        .loader-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(255,255,255,0.7);
+            z-index: 9999;
+            display: none;
+        }
+
+        .loader {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #0d6efd;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1.5s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-card">
+        <!-- Left: Image/Video & Upload -->
+        <div class="d-flex flex-column align-items-center gap-3" style="flex:1;">
+            <div class="image-part">
+                <video autoplay id="video" poster="https://viterbischool.usc.edu/wp-content/uploads/2024/12/JOIN-US-1.png"></video>
+                <img id="photo" src="" style="display:none;">
+            </div>
+            <input type="file" id="fileinput" hidden>
+            <div class="d-flex justify-content-between w-100 mt-2">
+                <button id="uload" class="btn btn-primary btn-upload">Upload</button>
+                <button id="send" class="btn btn-success btn-upload">Predict</button>
+            </div>
+        </div>
+
+        <!-- Right: Prediction result -->
+        <div style="flex:1;">
+            <h5 class="text-center">Prediction Result</h5>
+            <div class="prediction-result" id="result">Your prediction will appear here...</div>
+        </div>
+    </div>
+
+    <!-- Loader overlay -->
+    <div class="loader-overlay" id="loading">
+        <div class="loader"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script>
+        var base_data = "";
+
+        function sendRequest(base64Data){
+            if(!base64Data) return;
+            $("#loading").show();
+            $.ajax({
+                url: "/predict",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({image: base64Data}),
+                success: function(res){
+                    $("#result").text(JSON.stringify(res, null, 2));
+                    $("#loading").hide();
+                },
+                error: function(err){
+                    $("#result").text("Error: " + JSON.stringify(err));
+                    $("#loading").hide();
+                }
+            });
+        }
+
+        $(document).ready(function(){
+            $("#uload").click(function(){ $("#fileinput").click(); });
+
+            $("#fileinput").change(function(){
+                if(this.files && this.files[0]){
+                    var reader = new FileReader();
+                    reader.onload = function(e){
+                        var url = e.target.result;
+                        $("#photo").attr("src", url).show();
+                        $("#video").hide();
+                        var img = new Image();
+                        img.src = url;
+                        img.onload = function(){
+                            var canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            canvas.getContext('2d').drawImage(img, 0, 0);
+                            base_data = canvas.toDataURL('image/jpeg').split(',')[1];
+                        };
+                    };
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+
+            $("#send").click(function(){ sendRequest(base_data); });
+        });
+    </script>
+</body>
+</html>
